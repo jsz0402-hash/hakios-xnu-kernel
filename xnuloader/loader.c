@@ -652,6 +652,12 @@ enum {
 	CTX_ICC_PMR, CTX_ICC_IGRPEN1, CTX_ICC_BPR1, CTX_COUNT
 };
 uint64_t loader_ctx[CTX_COUNT];
+/*
+ * Payload "noapple": do not touch the Apple-only IMPLEMENTATION DEFINED registers. On a CPU that
+ * does not have them, reading or writing one is an undefined instruction -- and this happens in
+ * the middle of a hand-off, where nothing would be left to say why.
+ */
+int loader_skip_apple;
 int loader_save_ctx(void);
 void loader_return_stub(void);
 
@@ -681,8 +687,13 @@ __asm__ (
         "  mrs x9, tpidrro_el0\n   str x9, [x10, #296]\n"
         "  mrs x9, contextidr_el1\n str x9, [x10, #312]\n"
         "  mrs x9, mdscr_el1\n     str x9, [x10, #320]\n"
+        "  adrp x9, loader_skip_apple\n"
+        "  add  x9, x9, :lo12:loader_skip_apple\n"
+        "  ldr  w9, [x9]\n"
+        "  cbnz w9, 7f\n"
         "  mrs x9, s3_3_c4_c4_0\n          str x9, [x10, #328]\n"
         "  mrs x9, s3_3_c4_c4_1\n          str x9, [x10, #336]\n"
+        "7:\n"
         /* GICv3 CPU interface: the kernel reprograms it for its own interrupts */
         "  mrs x9, icc_pmr_el1\n     str x9, [x10, #344]\n"
         "  mrs x9, icc_igrpen1_el1\n str x9, [x10, #352]\n"
@@ -707,8 +718,16 @@ __asm__ (
         /* PSTATE bits the kernel may have left set. PAN in particular is fatal:
          * UEFI maps its memory as EL0-accessible, so with PAN every data access
          * (including the exception handler's own stack push) faults. */
+        "  mrs x9, id_aa64mmfr1_el1\n"  /* PAN is not there on v8.0 cores: writing it is undefined */
+        "  ubfx x9, x9, #20, #4\n"
+        "  cbz x9, 3f\n"
         "  .inst 0xd500409f\n"          /* msr PAN, #0 */
+        "3:\n"
+        "  mrs x9, id_aa64mmfr2_el1\n"  /* nor UAO */
+        "  ubfx x9, x9, #4, #4\n"
+        "  cbz x9, 4f\n"
         "  .inst 0xd500407f\n"          /* msr UAO, #0 */
+        "4:\n"
         "  mrs x9, sctlr_el1\n"
         "  bic x9, x9, #0x1\n"
         "  bic x9, x9, #0x4\n"
@@ -746,8 +765,13 @@ __asm__ (
         "  ldr x9, [x10, #344]\n msr icc_pmr_el1, x9\n"
         "  ldr x9, [x10, #360]\n msr icc_bpr1_el1, x9\n"
         "  ldr x9, [x10, #352]\n msr icc_igrpen1_el1, x9\n"
+        "  adrp x9, loader_skip_apple\n"
+        "  add  x9, x9, :lo12:loader_skip_apple\n"
+        "  ldr  w9, [x9]\n"
+        "  cbnz w9, 5f\n"
         "  ldr x9, [x10, #328]\n msr s3_3_c4_c4_0, x9\n"
         "  ldr x9, [x10, #336]\n msr s3_3_c4_c4_1, x9\n"
+        "5:\n"
         "  ldr x9, [x10, #104]\n msr cntkctl_el1, x9\n"
         "  ldr x9, [x10, #80]\n  msr cntv_cval_el0, x9\n"
         "  ldr x9, [x10, #72]\n  msr cntv_ctl_el0, x9\n"
@@ -2597,6 +2621,7 @@ struct payload_info {
 	const char *kernel_version;     /* kernel.ver: the version of the kernel in this payload (tools/kernel-version.py) */
 	int usb_mode;
 	int noreboot;                   /* "noreboot": after the kernel comes back, return to the shell that started us */
+	int noapple;                    /* "noapple": do not touch the Apple-only IMPLEMENTATION DEFINED registers */
 	const char *ladder;             /* "ladder": payload files to run one after another, in this one boot */
 	uint64_t logslot;               /* "logslot": write this run's log at that 1 MiB slot of the log partition */
 };
@@ -2680,6 +2705,8 @@ parse_payload(struct payload_info *pi, int verbose)
 			pi->usb_mode = 1;                         /* stay in the loader and take commands over USB */
 		} else if (str_eq(e->name, "noreboot")) {
 			pi->noreboot = 1;                         /* a ladder of runs in one boot: leave the shell running */
+		} else if (str_eq(e->name, "noapple")) {
+			pi->noapple = 1;                          /* (a CPU that has no Apple IMPDEF registers) */
 		} else if (str_eq(e->name, "logslot")) {
 			pi->logslot = parse_number(text, 10);     /* one run's log per MiB slot, read back all at once */
 		} else if (str_eq(e->name, "ladder")) {
@@ -2873,6 +2900,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		return 0;
 	}
 	log_slot = pi.logslot;
+	loader_skip_apple = pi.noapple;
 	if (!have_checkpoint) {
 		checkpoint = pi.checkpoint;
 	}
@@ -3505,7 +3533,11 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	wdt_set_ms(60000);
 
 	/* --- hand off (UEFI is left resident, see loader_save_ctx) ------------ */
+	print("HANDSHAKE: saving the UEFI context\n");
+	flush_log();
 	if (loader_save_ctx() == 0) {
+		print("HANDSHAKE: saved; handing the machine to the kernel\n");
+		flush_log();
 		/*
 		 * On real hardware (under the Qualcomm hypervisor) dirty data-cache
 		 * lines do not survive the MMU-off round trip. UEFI stays resident,
@@ -4463,6 +4495,18 @@ efi_main(efi_handle image, efi_system_table *st)
 
 	install_exception_hook();
 	wdt_arm();
+
+	/*
+	 * Which of the registers the return path touches exist here: a v8.0 core has no PAN or UAO,
+	 * and the Apple IMPLEMENTATION DEFINED ones may be missing on other SoCs.
+	 */
+	{
+		uint64_t sre = 0;
+		__asm__ volatile ("mrs %0, icc_sre_el1" : "=r" (sre));
+		print("cpu: id_aa64mmfr1_el1=%x (PAN field %x) id_aa64mmfr2_el1=%x (UAO field %x) icc_sre_el1=%x\n",
+		    READ_SYSREG(ID_AA64MMFR1_EL1), (READ_SYSREG(ID_AA64MMFR1_EL1) >> 20) & 0xf,
+		    READ_SYSREG(ID_AA64MMFR2_EL1), (READ_SYSREG(ID_AA64MMFR2_EL1) >> 4) & 0xf, sre);
+	}
 
 	int have_payload = parse_payload(&pi, 0);
 	/* a payload that names a ladder of payload files: run them all, in this one boot */
