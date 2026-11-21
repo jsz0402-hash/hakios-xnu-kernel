@@ -462,7 +462,6 @@ index 3e6bffa8c48e..43cffb98bdcc 100644
  mdevremoveall(void)
  {
 diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
-index 4df41ba1f61b..b5a79a02a3f5 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
 @@ -147,6 +147,14 @@
@@ -480,7 +479,7 @@ index 4df41ba1f61b..b5a79a02a3f5 100644
  #include <vm/vm_kern.h>                 /* for kmem_suballoc() */
  #include <sys/proc_uuid_policy.h>       /* proc_uuid_policy_init() */
  #include <netinet/flow_divert.h>        /* flow_divert_init() */
-@@ -490,7 +498,7 @@ bsd_init(void)
+@@ -490,7 +498,7 @@
  	platform_stall_panic_or_spin(PLATFORM_STALL_XNU_LOCATION_BSD_INIT);
  #endif
  
@@ -489,7 +488,33 @@ index 4df41ba1f61b..b5a79a02a3f5 100644
  
  #if DEBUG_BSDINIT
  #define bsd_init_kprintf(x, ...) kprintf("bsd_init: " x, ## __VA_ARGS__)
-@@ -976,6 +984,15 @@ bsd_init(void)
+@@ -498,6 +506,9 @@
+ #define bsd_init_kprintf(x, ...)
+ #endif
+ 
++	extern void loader_checkpoint(uint64_t n);
++
++	loader_checkpoint(220);
+ 	throttle_init();
+ 
+ 	printf(copyright);
+@@ -680,6 +691,7 @@
+ 	 */
+ 	bsd_init_kprintf("calling bsd_bufferinit\n");
+ 	bsd_bufferinit();
++	loader_checkpoint(221);
+ 
+ 	/*
+ 	 * Initialize the calendar.
+@@ -690,6 +702,7 @@
+ 	/* Initialize the file systems. */
+ 	bsd_init_kprintf("calling vfsinit\n");
+ 	vfsinit();
++	loader_checkpoint(222);
+ 
+ #if CONFIG_PROC_UUID_POLICY
+ 	/* Initial proc_uuid_policy subsystem */
+@@ -976,6 +989,15 @@
  
  		bsd_init_kprintf("calling devfs_kernel_mount\n");
  		devfs_kernel_mount(mounthere);
@@ -3524,7 +3549,7 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
  
  	/*
  	 * Thread lifecycle maintenance (teardown, stack allocation)
-@@ -696,6 +710,7 @@
+@@ -696,12 +710,14 @@
  	 * interrupts or preemption enabled may begin enforcement.
  	 */
  	kernel_startup_initialize_upto(STARTUP_SUB_EARLY_BOOT);
@@ -3532,7 +3557,22 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
  
  #if SCHED_HYGIENE_DEBUG
  	// Reset interrupts masked timeout before we enable interrupts
-@@ -721,6 +736,9 @@
+ 	ml_spin_debug_clear_self();
+ #endif
+ 	(void) spllo();         /* Allow interruptions */
++	loader_checkpoint(214);
+ 
+ 	/*
+ 	 * This will start displaying progress to the user, start as early as possible
+@@ -713,6 +729,7 @@
+ 	 */
+ 	vm_commpage_init();
+ 	vm_commpage_text_init();
++	loader_checkpoint(215);
+ 
+ #if CONFIG_MACF
+ 	kernel_bootstrap_log("mac_policy_initmach");
+@@ -721,6 +738,9 @@
  	kernel_bootstrap_log("vnguard_policy_init");
  	vnguard_policy_init();
  #endif
@@ -3542,6 +3582,22 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
  #endif
  
  #if CONFIG_DTRACE
+@@ -758,6 +778,7 @@
+ 	/* No changes to kernel text and rodata beyond this point. */
+ 	kernel_bootstrap_log("machine_lockdown");
+ 	machine_lockdown();
++	loader_checkpoint(216);
+ 
+ #ifdef CONFIG_XNUPOST
+ 	kern_return_t result = kernel_list_tests();
+@@ -787,6 +808,7 @@
+ 	 *	Start the user bootstrap.
+ 	 */
+ #ifdef  MACH_BSD
++	loader_checkpoint(217);
+ 	bsd_init();
+ #endif
+ 
 diff --git a/osfmk/kern/thread.c b/osfmk/kern/thread.c
 index 384ef23fe0e1..d5ab6db0edbc 100644
 --- a/osfmk/kern/thread.c
