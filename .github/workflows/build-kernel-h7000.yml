@@ -1,0 +1,58 @@
+name: build-kernel-h7000
+on:
+  push:
+    paths:
+      - ".github/workflows/build-kernel-h7000.yml"
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential fakeroot rsync curl perl git libxml2 \
+            libncurses-dev xz-utils unzip zstd lld llvm clang bison flex m4 zlib1g-dev libssl-dev \
+            python3 uuid-dev libbsd-dev pkg-config autoconf automake libtool
+          clang --version | head -2
+      - name: theos
+        run: |
+          set -e
+          export THEOS="$HOME/theos"
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+          ARCH=$(uname -m)
+          mkdir -p "$THEOS/toolchain"
+          curl -sL "https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-$ARCH.tar.xz" | tar -xJ -C "$THEOS/toolchain/"
+          ls "$THEOS/toolchain/linux/iphone/bin" | head -10
+          mkdir -p "$THEOS/sdks"
+          curl -sL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
+          unzip -q /tmp/sdks.zip -d /tmp/sdks
+          cp -r /tmp/sdks/sdks-master/iPhoneOS16.5.sdk "$THEOS/sdks/"
+      - name: config
+        run: |
+          chmod +x xnu/*.sh xnu-deps/*.sh xnu-build.sh tools/*.py 2>/dev/null || true
+          make h7000_defconfig DEVICE=h7000 2>&1 | tail -20
+      - name: apply
+        run: xnu/apply.sh 2>&1 | tail -20
+      - name: deps-setup
+        run: xnu-deps/setup.sh 2>&1 | tail -40
+      - name: build
+        run: |
+          ./xnu-build.sh -j"$(nproc)" -k 2>&1 | tail -80 || true
+          echo "=== kernel candidates ==="
+          find xnu-src -maxdepth 6 -name 'mach.*bcm2837*' -printf '%s %p\n' 2>/dev/null | sort -n | tail -10
+          K=$(find xnu-src -maxdepth 6 -name 'mach.development.bcm2837' 2>/dev/null | head -1)
+          echo "kernel: $K"
+          if [ -n "$K" ]; then cp "$K" hakios-kernel; fi
+          ls -la hakios-kernel || true
+          python3 -c "d=open('hakios-kernel','rb').read(); print('magic', d[:4].hex(), 'size', len(d))" || true
+          md5sum hakios-kernel || true
+      - name: artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hakios-kernel
+          path: hakios-kernel
+          if-no-files-found: error
