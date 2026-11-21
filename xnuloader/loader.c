@@ -2597,6 +2597,7 @@ struct payload_info {
 	const char *kernel_version;     /* kernel.ver: the version of the kernel in this payload (tools/kernel-version.py) */
 	int usb_mode;
 	int noreboot;                   /* "noreboot": after the kernel comes back, return to the shell that started us */
+	const char *ladder;             /* "ladder": payload files to run one after another, in this one boot */
 	uint64_t logslot;               /* "logslot": write this run's log at that 1 MiB slot of the log partition */
 };
 
@@ -2681,6 +2682,8 @@ parse_payload(struct payload_info *pi, int verbose)
 			pi->noreboot = 1;                         /* a ladder of runs in one boot: leave the shell running */
 		} else if (str_eq(e->name, "logslot")) {
 			pi->logslot = parse_number(text, 10);     /* one run's log per MiB slot, read back all at once */
+		} else if (str_eq(e->name, "ladder")) {
+			pi->ladder = text;                        /* "\a.bin,\b.bin,...": a ladder of payload files */
 		}
 		p += sizeof(*e) + ((e->size + 15) & ~15u);
 	}
@@ -4217,18 +4220,22 @@ ramfb_phone_screen(void)
 static uint64_t volume_payload_bytes;           /* 0: nothing was read; else the payload's size */
 static const char *volume_payload_note;         /* why not, if it was looked for */
 
+static int payload_region_owned;                /* the payload pages are taken once; a ladder loads many files into them */
+
 static int
-load_payload_from_volume(void)
+load_payload_file(const char16 *path)
 {
 	static const efi_guid image_guid = EFI_LOADED_IMAGE_GUID, fs_guid = EFI_SIMPLE_FILE_SYSTEM_GUID,
 	    info_guid = EFI_FILE_INFO_GUID;
-	static const char16 path[] = u"\\EFI\\hakios\\payload.bin";
 	efi_loaded_image *image = NULL;
 	efi_simple_fs *fs = NULL;
 	efi_file *root = NULL, *file = NULL;
 	uint8_t info[512] __attribute__((aligned(8)));
 	uint64_t info_size = sizeof(info), size, done = 0, pages;
 	uint64_t address = PAYLOAD_BASE;
+
+	volume_payload_bytes = 0;
+	volume_payload_note = NULL;
 
 	if (EFI_ERROR(BS->handle_protocol(IMAGE, &image_guid, (void **)&image)) || image == NULL || image->device == NULL ||
 	    EFI_ERROR(BS->handle_protocol(image->device, &fs_guid, (void **)&fs)) || fs == NULL) {
@@ -4240,17 +4247,17 @@ load_payload_from_volume(void)
 		return 0;
 	}
 	if (EFI_ERROR(root->open(root, &file, path, EFI_FILE_MODE_READ, 0)) || file == NULL) {
-		volume_payload_note = "there is no \\EFI\\hakios\\payload.bin on the volume";
+		volume_payload_note = "the payload file cannot be opened on the volume";
 		root->close(root);
 		return 0;
 	}
 	if (EFI_ERROR(file->get_info(file, &info_guid, &info_size, info))) {
-		volume_payload_note = "the size of \\EFI\\hakios\\payload.bin cannot be read";
+		volume_payload_note = "the size of the payload file cannot be read";
 		goto close;
 	}
 	size = *(uint64_t *)(info + EFI_FILE_INFO_FILE_SIZE_OFFSET);
 	if (size < sizeof(struct payload_header) || size > PAYLOAD_MAX_SIZE - 0x100000ULL) {
-		volume_payload_note = "\\EFI\\hakios\\payload.bin is empty or does not fit in the payload region (63 MiB)";
+		volume_payload_note = "the payload file is empty or does not fit in the payload region (63 MiB)";
 		goto close;
 	}
 	/*
@@ -4259,26 +4266,26 @@ load_payload_from_volume(void)
 	 * memory the firmware has not given to us must not be written.
 	 */
 	pages = PAYLOAD_MAX_SIZE / 0x1000;
-	if (EFI_ERROR(BS->allocate_pages(2 /* AllocateAddress */, 2 /* EfiLoaderData */, pages, &address))) {
-		volume_payload_note = "the payload region is not free (the firmware keeps it reserved)";
-		goto close;
+	if (!payload_region_owned) {
+		if (EFI_ERROR(BS->allocate_pages(2 /* AllocateAddress */, 2 /* EfiLoaderData */, pages, &address))) {
+			volume_payload_note = "the payload region is not free (the firmware keeps it reserved)";
+			goto close;
+		}
+		payload_region_owned = 1;
 	}
+	/* a file that is not read to its end must not leave the previous payload's XNUP at the start */
+	((volatile struct payload_header *)PAYLOAD_BASE)->magic = 0;
 	while (done < size) {
 		uint64_t chunk = size - done < 0x100000ULL ? size - done : 0x100000ULL;       /* 1 MiB at a time */
 
 		if (EFI_ERROR(file->read(file, &chunk, (void *)(uintptr_t)(PAYLOAD_BASE + done))) || chunk == 0) {
-			volume_payload_note = "\\EFI\\hakios\\payload.bin could not be read to its end";
-			/* what was read stays in memory after the pages are given back: without this, the first MiB's XNUP
-			 * header would still be there and a half-read payload would be taken for a whole one */
-			((volatile struct payload_header *)PAYLOAD_BASE)->magic = 0;
-			BS->free_pages(PAYLOAD_BASE, pages);
+			volume_payload_note = "the payload file could not be read to its end";
 			goto close;
 		}
 		done += chunk;
 	}
 	if (((const struct payload_header *)PAYLOAD_BASE)->magic != PAYLOAD_MAGIC) {
-		volume_payload_note = "\\EFI\\hakios\\payload.bin is not a payload (no XNUP at its start)";
-		BS->free_pages(PAYLOAD_BASE, pages);
+		volume_payload_note = "the payload file is not a payload (no XNUP at its start)";
 		goto close;
 	}
 	volume_payload_bytes = size;
@@ -4286,6 +4293,69 @@ close:
 	file->close(file);
 	root->close(root);
 	return volume_payload_bytes != 0;
+}
+
+/* The historical one: \EFI\hakios\payload.bin on the volume the loader was started from. */
+static int
+load_payload_from_volume(void)
+{
+	static const char16 path[] = u"\\EFI\\hakios\\payload.bin";
+
+	return load_payload_file(path);
+}
+
+/* The same file, named as the payload's "ladder" entry names it (an ASCII path on this volume). */
+static int
+load_payload_path(const char *path)
+{
+	char16 wide[128];
+	int i = 0;
+
+	while (path[i] != 0 && i < (int)(sizeof(wide) / sizeof(wide[0])) - 1) {
+		wide[i] = (char16)(unsigned char)path[i];
+		i++;
+	}
+	wide[i] = 0;
+	return load_payload_file(wide);
+}
+
+/*
+ * A ladder: the payload that brought this list names files on the volume, each a payload of
+ * its own. Each is read in its turn and its kernel is run until the checkpoint that payload
+ * asks for; a run that does not come back ends the ladder right there (the screen keeps it).
+ * Nothing resets: the shell that started us gets the loader back, and the log partition has
+ * one log per run in the slots the payloads name.
+ */
+static void
+run_ladder(const char *list)
+{
+	int step = 0;
+
+	while (*list != 0) {
+		char name[96];
+		int n = 0;
+
+		while (*list == ' ' || *list == ',') {
+			list++;
+		}
+		if (*list == 0) {
+			break;
+		}
+		while (*list != 0 && *list != ',' && *list != ' ' && n < (int)sizeof(name) - 1) {
+			name[n++] = *list++;
+		}
+		name[n] = 0;
+		step++;
+		log_len = 0;                            /* one run's log per step: it is what its own slot gets */
+		print("\n== LADDER STEP %d: %s ==\n", (uint64_t)step, name);
+		if (!load_payload_path(name)) {
+			print("ladder: step %d (%s): %s; stopping\n", (uint64_t)step, name,
+			    volume_payload_note != NULL ? volume_payload_note : "cannot be loaded");
+			return;
+		}
+		run_kernel(0, 0);
+	}
+	print("\n== LADDER DONE (%d steps) ==\n", (uint64_t)step);
 }
 
 /*
@@ -4392,6 +4462,11 @@ efi_main(efi_handle image, efi_system_table *st)
 	wdt_arm();
 
 	int have_payload = parse_payload(&pi, 0);
+	/* a payload that names a ladder of payload files: run them all, in this one boot */
+	if (have_payload && pi.ladder != NULL) {
+		run_ladder(pi.ladder);
+		return 0;
+	}
 	if (have_payload && pi.usb_mode && usb_start()) {
 		flush_log();
 		usb_command_loop();
@@ -4403,7 +4478,7 @@ efi_main(efi_handle image, efi_system_table *st)
 		if (pi.noreboot) {
 			/* a ladder: the shell that started us goes on with the next step, no reset */
 			print("loader: kernel run done, returning to the shell (noreboot)\n");
-			return EFI_SUCCESS;
+			return 0;
 		}
 	}
 	reboot();
