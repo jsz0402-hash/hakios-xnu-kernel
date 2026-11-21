@@ -4425,10 +4425,13 @@ efi_main(efi_handle image, efi_system_table *st)
 	IMAGE = image;
 
 	BS->set_watchdog_timer(0, 0, 0, NULL);
-	/* no payload in memory (nobody put one there): the volume this loader came from may have one, as a UEFI boot loader's does */
-	if (((const struct payload_header *)PAYLOAD_BASE)->magic != PAYLOAD_MAGIC) {
-		load_payload_from_volume();
-	}
+	/*
+	 * The payload file on the volume wins over whatever was left at PAYLOAD_BASE: a cold reset
+	 * does not clear RAM, so a payload of an earlier run (or of the previous boot) would else be
+	 * taken for this boot's. With no such file (fastboot's shim puts the payload in memory) the
+	 * payload in memory is the one used.
+	 */
+	load_payload_from_volume();
 	print("== XNULOADER v3 ==\n");
 	print_banner();
 	if (volume_payload_bytes != 0) {
