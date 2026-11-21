@@ -65,6 +65,12 @@ void loader_checkpoint(uint64_t n);
 /* Also referenced from the early exception vector in start.s. */
 char     loader_log[LOADER_LOG_SIZE];
 uint32_t loader_log_len;
+/*
+ * Set by PE_init_platform() once the boot arguments are there. A checkpoint can stop before
+ * that (the loader asks for one at arm_init's entry), and PE_parse_boot_argn() would then read
+ * through a null boot_args: the return path must not ask it anything before this is 1.
+ */
+int      loader_pe_ready;
 static bool     loader_return_entered;
 
 /* One L1 table and one L2 table are enough to map a single 2 MB block. */
@@ -255,7 +261,7 @@ loader_jump(uint64_t reason, uint64_t code)
 	 * firmware switch this one off. It must go as the other cores do (psci_smp_cpu_off()), with
 	 * nothing pending: after a panic the "stop" signal and the timer are.
 	 */
-	if (PE_parse_boot_argn("bootcpu", &own_core, sizeof(own_core))) {
+	if (loader_pe_ready && PE_parse_boot_argn("bootcpu", &own_core, sizeof(own_core))) {
 		__builtin_arm_wsr64("CNTV_CTL_EL0", CNTV_CTL_EL0_IMASKED);
 		gic_v3_irq_cpu_shutdown();
 	}
