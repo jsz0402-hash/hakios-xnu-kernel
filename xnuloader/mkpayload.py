@@ -15,6 +15,9 @@ ap.add_argument('-o', '--output', required=True)
 ap.add_argument('--cmdline', default='')
 ap.add_argument('--physbase', default='', help='hex: force XNU physical base (testing)')
 ap.add_argument('--usb', action='store_true', help='make the loader stay resident and take commands over USB')
+ap.add_argument('--noreboot', action='store_true',
+                help='after the kernel comes back, return to the shell instead of resetting (a ladder of runs in one boot)')
+ap.add_argument('--logslot', default='', help='write this run log at that 1 MiB slot of the log partition (ladder)')
 ap.add_argument('--rdres', default='', help='hex size of a root image already placed at the resident address (QEMU)')
 # (a resident image the loader places itself: give it as an item, resident=FILE -- a boot with no host, from the phone's boot partition)
 ap.add_argument('--checkpoint', default='', help='kernel checkpoint to stop at; 999 = loader self test')
@@ -40,6 +43,10 @@ if args.rdres:
     add('rdres', args.rdres.lower().replace('0x', '').encode() + b'\0')
 if args.usb:
     add('usb', b'1\0')
+if args.noreboot:
+    add('noreboot', b'1\0')
+if args.logslot:
+    add('logslot', args.logslot.encode() + b'\0')
 if args.checkpoint:
     add('checkpoint', args.checkpoint.encode() + b'\0')
 # The version of the kernel in this payload, which the loader prints as "kernel.ver=" under its banner and
