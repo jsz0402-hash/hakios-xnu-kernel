@@ -30,6 +30,13 @@ jobs:
           curl -sL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
           unzip -q /tmp/sdks.zip -d /tmp/sdks
           cp -r /tmp/sdks/sdks-master/iPhoneOS16.5.sdk "$THEOS/sdks/"
+      - name: loader
+        run: |
+          ./xnuloader/mkidentity.sh --placeholder
+          make loader 2>&1 | tail -20
+          ls -la xnuloader/loader.efi
+          python3 -c "d=open('xnuloader/loader.efi','rb').read(); print('loader size', len(d), 'magic', d[:2])"
+          md5sum xnuloader/loader.efi
       - name: config
         run: |
           chmod +x xnu/*.sh xnu-deps/*.sh xnu-build.sh tools/*.py 2>/dev/null || true
@@ -53,6 +60,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hakios-kernel
-          path: hakios-kernel
-          if-no-files-found: error
+          name: hakios-build
+          path: |
+            hakios-kernel
+            xnuloader/loader.efi
+          if-no-files-found: warn
