@@ -304,6 +304,8 @@ find_log_partition(void)
  */
 /* aligned for any firmware's block I/O: U-Boot's wants a buffer aligned to the block size (media->io_align) */
 static char out_buf[2 * 1024 * 1024] __attribute__((aligned(0x2000)));
+/* "logslot" of the payload being run: 0 keeps the historical behaviour (the start of the partition) */
+static uint64_t log_slot;
 /* the storage's reads for the kernel land here (block_poll), and nothing else may be put in it */
 #define BLOCK_BUFFER_SIZE  (4u << 20)
 static uint8_t block_buffer[BLOCK_BUFFER_SIZE] __attribute__((aligned(0x2000)));
@@ -388,6 +390,8 @@ write_logs(const char *klog, uint64_t klog_len)
 	}
 	uint64_t bs = bio->media->block_size;
 	uint64_t len = (staged_len + 1 + bs - 1) / bs * bs;
+	/* a ladder of runs keeps one log per MiB slot, so a whole boot's runs can be read back at once */
+	uint64_t slot_lba = log_slot * ((1024 * 1024) / bs);
 	efi_status ws, rs = 0;
 	int same = 0;
 
@@ -400,7 +404,7 @@ write_logs(const char *klog, uint64_t klog_len)
 		compose_logs(klog, klog_len);
 		return;
 	}
-	ws = bio->write_blocks(bio, bio->media->media_id, 0, len, out_buf);
+	ws = bio->write_blocks(bio, bio->media->media_id, slot_lba, len, out_buf);
 
 	if (!EFI_ERROR(ws)) {
 		bio->flush_blocks(bio);
@@ -410,12 +414,12 @@ write_logs(const char *klog, uint64_t klog_len)
 		 * the copy the host fetches over USB, not into the partition, which already has the rest.
 		 */
 		if (len <= sizeof(log_verify)) {
-			rs = bio->read_blocks(bio, bio->media->media_id, 0, len, log_verify);
+			rs = bio->read_blocks(bio, bio->media->media_id, slot_lba, len, log_verify);
 			flush_dcache((uint64_t)(uintptr_t)log_verify, (uint64_t)(uintptr_t)log_verify + len);
 			same = !EFI_ERROR(rs) && memcmp(log_verify, out_buf, len) == 0;
 		}
 	}
-	print("log: %d bytes written to logdump (%x), read back %s (%x)\n", len, ws,
+	print("log: %d bytes written to logdump slot %d (%x), read back %s (%x)\n", len, log_slot, ws,
 	    EFI_ERROR(ws) ? "not tried" : same ? "the same" : "DIFFERENT", rs);
 	compose_logs(klog, klog_len);
 }
@@ -2592,6 +2596,8 @@ struct payload_info {
 	uint32_t resident_size;
 	const char *kernel_version;     /* kernel.ver: the version of the kernel in this payload (tools/kernel-version.py) */
 	int usb_mode;
+	int noreboot;                   /* "noreboot": after the kernel comes back, return to the shell that started us */
+	uint64_t logslot;               /* "logslot": write this run's log at that 1 MiB slot of the log partition */
 };
 
 static uint64_t
@@ -2671,6 +2677,10 @@ parse_payload(struct payload_info *pi, int verbose)
 			pi->checkpoint = parse_number(text, 10);  /* where the kernel should stop and come back */
 		} else if (str_eq(e->name, "usb")) {
 			pi->usb_mode = 1;                         /* stay in the loader and take commands over USB */
+		} else if (str_eq(e->name, "noreboot")) {
+			pi->noreboot = 1;                         /* a ladder of runs in one boot: leave the shell running */
+		} else if (str_eq(e->name, "logslot")) {
+			pi->logslot = parse_number(text, 10);     /* one run's log per MiB slot, read back all at once */
 		}
 		p += sizeof(*e) + ((e->size + 15) & ~15u);
 	}
@@ -2859,6 +2869,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		print("no kernel in payload\n");
 		return 0;
 	}
+	log_slot = pi.logslot;
 	if (!have_checkpoint) {
 		checkpoint = pi.checkpoint;
 	}
@@ -4386,9 +4397,14 @@ efi_main(efi_handle image, efi_system_table *st)
 		usb_command_loop();
 	}
 
-	/* One-shot mode: run the kernel that came with the image, then reset. */
+	/* One-shot mode: run the kernel that came with the image, then reset (unless the payload says otherwise). */
 	if (have_payload) {
 		run_kernel(0, 0);
+		if (pi.noreboot) {
+			/* a ladder: the shell that started us goes on with the next step, no reset */
+			print("loader: kernel run done, returning to the shell (noreboot)\n");
+			return EFI_SUCCESS;
+		}
 	}
 	reboot();
 	return 0;
