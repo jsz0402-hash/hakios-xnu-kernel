@@ -4361,8 +4361,17 @@ load_payload_path(const char *path)
 static void
 run_ladder(const char *list)
 {
+	char steps[256];
 	int step = 0;
+	int n = 0;
 
+	/* the list lives in the payload that the first step replaces: keep a copy of it */
+	while (list[n] != 0 && n < (int)sizeof(steps) - 1) {
+		steps[n] = list[n];
+		n++;
+	}
+	steps[n] = 0;
+	list = steps;
 	while (*list != 0) {
 		char name[96];
 		int n = 0;
