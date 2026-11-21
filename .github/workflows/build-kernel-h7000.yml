@@ -13,35 +13,40 @@ jobs:
       - name: deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld llvm python3 perl curl git make g++ flex bison m4 \
-            libssl-dev zlib1g-dev libxml2-dev xz-utils uuid-dev zstd unzip libncurses-dev
-          echo "--- toolchain ---"; clang --version | head -2; lld --version | head -1
+          sudo apt-get install -y -qq build-essential fakeroot rsync curl perl git libxml2 \
+            libncurses5 libncurses-dev xz-utils unzip zstd lld llvm clang bison flex m4 zlib1g-dev libssl-dev python3
+          clang --version | head -2
       - name: theos
         run: |
-          git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos" || echo "theos clone failed"
-          mkdir -p "$HOME/theos/sdks"
+          set -e
+          export THEOS="$HOME/theos"
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+          ARCH=$(uname -m)
+          echo "ARCH=$ARCH"
+          mkdir -p "$THEOS/toolchain"
+          curl -sL "https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-$ARCH.tar.xz" | tar -xJ -C "$THEOS/toolchain/"
+          ls "$THEOS/toolchain"
+          ls "$THEOS/toolchain/linux/iphone/bin" | head -10 || true
+          mkdir -p "$THEOS/sdks"
           curl -sL -o /tmp/sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
-          unzip -q /tmp/sdks.zip -d /tmp/sdks || true
-          cp -r /tmp/sdks/sdks-master/iPhoneOS16.5.sdk "$HOME/theos/sdks/" || true
-          ls "$HOME/theos/sdks" || true
-          ls "$HOME/theos/tools" 2>/dev/null | head -5 || true
+          unzip -q /tmp/sdks.zip -d /tmp/sdks
+          cp -r /tmp/sdks/sdks-master/iPhoneOS16.5.sdk "$THEOS/sdks/" || ls /tmp/sdks/sdks-master | head
+          ls "$THEOS/sdks"
       - name: config
         run: |
           chmod +x xnu/*.sh xnu-deps/*.sh xnu-build.sh tools/*.py 2>/dev/null || true
           make h7000_defconfig DEVICE=h7000 2>&1 | tail -30
       - name: apply
-        run: |
-          set -o pipefail
-          xnu/apply.sh 2>&1 | tail -40
+        run: xnu/apply.sh 2>&1 | tail -30
       - name: deps-setup
-        run: |
-          xnu-deps/setup.sh 2>&1 | tail -60
+        run: xnu-deps/setup.sh 2>&1 | tail -80
       - name: build
         continue-on-error: true
         run: |
-          ./xnu-build.sh -j"$(nproc)" -k 2>&1 | tail -200
-          echo "=== kernel? ==="
-          ls -la hakios-kernel 2>/dev/null || ls -la xnu-src/*/BUILD/obj/*/ 2>/dev/null | tail -20 || true
+          ./xnu-build.sh -j"$(nproc)" -k 2>&1 | tail -250
+          echo "=== kernel ==="
+          ls -la hakios-kernel 2>/dev/null || true
+          find . -name 'mach.*.unstripped' -o -name 'mach.development*' 2>/dev/null | head -20
       - name: artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,5 +54,5 @@ jobs:
           name: hakios-kernel
           path: |
             hakios-kernel
-            xnu-src/**/BUILD/obj/**/mach.*.unstripped
+            xnu-src/**/BUILD/obj/**/mach.*
           if-no-files-found: warn
