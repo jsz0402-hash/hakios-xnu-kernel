@@ -3602,12 +3602,13 @@ index 3ebc295117a3..de101eafc83b 100755
 diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
 --- a/pexpert/arm/pe_init.c
 +++ b/pexpert/arm/pe_init.c
-@@ -389,6 +389,9 @@
+@@ -389,6 +389,10 @@
  	SecureDTInit(PE_state.deviceTreeHead, PE_state.deviceTreeSize);
  }
  
 +/* Bring-up checkpoints of this port (see osfmk/arm/arm_init.c and osfmk/arm64/loader_return.c): */
 +extern void loader_checkpoint(uint64_t n);
++extern int loader_pe_ready;                    /* (the return path must not ask for boot args before this) */
 +
  void
  PE_init_platform(boolean_t vm_initialized, void *args)
@@ -3620,10 +3621,11 @@ diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
  	if (PE_state.initialized == FALSE) {
  		PE_state.initialized = TRUE;
  		PE_state.bootArgs = boot_args_ptr;
-@@ -415,6 +419,7 @@
+@@ -415,6 +419,8 @@
  		PE_state.video.v_display = boot_args_ptr->Video.v_display;
  		strlcpy(PE_state.video.v_pixelFormat, "BBBBBBBBGGGGGGGGRRRRRRRR", sizeof(PE_state.video.v_pixelFormat));
  	}
++	loader_pe_ready = 1;
 +	loader_checkpoint(103);
  	if (!vm_initialized) {
  		/*
