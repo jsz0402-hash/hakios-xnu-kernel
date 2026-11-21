@@ -3028,6 +3028,75 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
  	add		x0, x20, x22
  	sub		x0, x0, x23
  
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -50,6 +50,9 @@
+ #include <libkern/section_keywords.h>
+ 
+ #include <san/kasan.h>
++
++/* Bring-up checkpoints of this port (see osfmk/arm64/loader_return.c): */
++extern void loader_checkpoint(uint64_t n);
+ 
+ #if __ARM_KERNEL_PROTECT__
+ /*
+@@ -1825,6 +1828,8 @@
+ 	vm_offset_t      ptpage_vaddr;
+ 	vm_map_address_t dynamic_memory_begin;
+ 
++	loader_checkpoint(170);
++
+ 	/*
+ 	 * Get the virtual and physical kernel-managed memory base from boot_args.
+ 	 */
+@@ -1847,6 +1852,7 @@
+ 	gPhysSize = mem_size = ((gPhysBase + args->memSize) & ~PAGE_MASK) - gPhysBase;
+ 
+ 	mem_actual = args->memSizeActual ? args->memSizeActual : mem_size;
++	loader_checkpoint(171);
+ 
+ 	if ((memory_size != 0) && (mem_size > memory_size)) {
+ 		mem_size = memory_size;
+@@ -2094,7 +2100,11 @@
+ 	vm_prelink_sdata = segPRELINKDATAB;
+ 	vm_prelink_edata = segPRELINKDATAB + segSizePRELINKDATA;
+ 
++	loader_checkpoint(172);
++
+ 	arm_vm_prot_init(args);
++
++	loader_checkpoint(173);
+ 
+ 	/*
+ 	 * Initialize the page tables for the low globals:
+@@ -2145,6 +2155,8 @@
+ 
+ 	ml_enable_monitor();
+ 
++	loader_checkpoint(174);
++
+ 	set_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);
+ 
+ 	flush_mmu_tlb();
+@@ -2152,6 +2164,8 @@
+ 	// global table pointers may need to be different due to physical aperture remapping
+ 	cpu_tte = (tt_entry_t*)(phystokv(cpu_ttep));
+ 	invalid_tte = (tt_entry_t*)(phystokv(invalid_ttep));
++
++	loader_checkpoint(175);
+ 
+ 	// From here on out, we're off the bootstrap translation tables.
+ 
+@@ -2244,6 +2258,8 @@
+     }
+ #endif
+ #endif
++	loader_checkpoint(176);
++
+ 	pmap_bootstrap(dynamic_memory_begin);
+ 
+ 	disable_preemption();
 diff --git a/osfmk/conf/Makefile b/osfmk/conf/Makefile
 index 050f34a53c49..c58ff62cd419 100644
 --- a/osfmk/conf/Makefile
