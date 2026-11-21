@@ -2597,10 +2597,9 @@ index e76e7e70ab9c..828a51171c7e 100644
  
  void
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index e5336e5a1cce..a54e35035cde 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -126,6 +126,27 @@ LEXT(LowResetVectorBase)
+@@ -126,6 +126,27 @@
  	.globl EXT(reset_vector)
  LEXT(reset_vector)
  	// Preserve x0 for start_first_cpu, if called
@@ -2628,7 +2627,7 @@ index e5336e5a1cce..a54e35035cde 100644
  	// Unlock the core for debugging
  	msr		OSLAR_EL1, xzr
  	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
-@@ -136,6 +157,7 @@ LEXT(reset_vector)
+@@ -136,6 +157,7 @@
  	add     x0, x0, EXT(LowExceptionVectorBase)@pageoff
  	msr     VBAR_EL1, x0
  #endif
@@ -2636,7 +2635,7 @@ index e5336e5a1cce..a54e35035cde 100644
  
  
  
-@@ -143,7 +165,9 @@ LEXT(reset_vector)
+@@ -143,7 +165,9 @@
  	adrp	x19, EXT(ResetHandlerData)@page			// Get address of the reset handler data
  	add		x19, x19, EXT(ResetHandlerData)@pageoff
  	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
@@ -2647,59 +2646,71 @@ index e5336e5a1cce..a54e35035cde 100644
  	and		x0, x15, #0xFFFF					// CPU number in Affinity0, cluster ID in Affinity1
  #else
  	and		x0, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
-@@ -233,40 +257,175 @@ LEXT(_start)
+@@ -233,40 +257,175 @@
  	.global	EXT(LowExceptionVectorBase)
  LEXT(LowExceptionVectorBase)
  	/* EL1 SP 0 */
 -	b		.
-+	b		Lloader_early_exception
- 	.align	7
+-	.align	7
+-	b		.
+-	.align	7
+-	b		.
+-	.align	7
 -	b		.
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
++	b		Lloader_early_exception
++	.align	7
 +	b		Lloader_early_exception
  	/* EL1 SP1 */
  	.align	7
 -	b		.
-+	b		Lloader_early_exception
- 	.align	7
+-	.align	7
+-	b		.
+-	.align	7
+-	b		.
+-	.align	7
 -	b		.
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
++	b		Lloader_early_exception
++	.align	7
 +	b		Lloader_early_exception
  	/* EL0 64 */
  	.align	7
 -	b		.
-+	b		Lloader_early_exception
- 	.align	7
+-	.align	7
+-	b		.
+-	.align	7
+-	b		.
+-	.align	7
 -	b		.
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
++	b		Lloader_early_exception
++	.align	7
 +	b		Lloader_early_exception
  	/* EL0 32 */
  	.align	7
 -	b		.
-+	b		Lloader_early_exception
- 	.align	7
+-	.align	7
+-	b		.
+-	.align	7
+-	b		.
+-	.align	7
 -	b		.
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
 +	b		Lloader_early_exception
- 	.align	7
--	b		.
++	.align	7
++	b		Lloader_early_exception
++	.align	7
 +	b		Lloader_early_exception
 +
 +/*
@@ -2839,7 +2850,7 @@ index e5336e5a1cce..a54e35035cde 100644
  	.align 12, 0
  
  #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
-@@ -452,22 +611,51 @@ start_cpu:
+@@ -452,21 +611,50 @@
   * Cold boot init routine.  Called from __start
   *   x0 - Boot args
   */
@@ -2878,23 +2889,23 @@ index e5336e5a1cce..a54e35035cde 100644
  
  	mov		x20, x0
  	mov		x21, #0
-+	LOADER_CHECKPOINT 1
- 
+-
 -	// Set low reset vector before attempting any loads
++	LOADER_CHECKPOINT 1
++
 +	// Set low reset vector before attempting anything that might trap
 +	// (under a third-party hypervisor even the OS lock write below can).
  	adrp	x0, EXT(LowExceptionVectorBase)@page
  	add		x0, x0, EXT(LowExceptionVectorBase)@pageoff
  	MSR_VBAR_EL1_X0
- 
++
 +	// Unlock the core for debugging
 +	msr		OSLAR_EL1, xzr
 +	LOADER_CHECKPOINT 2
-+
+ 
  
  	// Get the kernel memory parameters from the boot args
- 	ldr		x22, [x20, BA_VIRT_BASE]			// Get the kernel virt base
-@@ -612,6 +800,7 @@ Lkernelcache_base_found:
+@@ -612,6 +800,7 @@
  	/* Ensure TTEs are visible */
  	dsb		ish
  
@@ -2902,7 +2913,7 @@ index e5336e5a1cce..a54e35035cde 100644
  
  	b		common_start
  
-@@ -686,7 +875,10 @@ common_start:
+@@ -686,7 +875,10 @@
  	dsb		ish
  
  
@@ -2914,7 +2925,7 @@ index e5336e5a1cce..a54e35035cde 100644
  	// Setup timer interrupt routing; must be done before MMU is enabled
  	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
  	and		x15, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
-@@ -740,10 +932,17 @@ common_start:
+@@ -740,16 +932,26 @@
  	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
  #endif /* HAS_APPLE_PAC */
  
@@ -2932,6 +2943,45 @@ index e5336e5a1cce..a54e35035cde 100644
  
  #if !VMAPPLE
  	MOV64   x1, SCTLR_EL1_DEFAULT
+ 	cmp		x0, x1
+ 	bne		.
+ #endif /* !VMAPPLE */
++	cbnz	x21, 9f
++	LOADER_CHECKPOINT 6
++9:
+ 
+ #if (!CONFIG_KERNEL_INTEGRITY || (CONFIG_KERNEL_INTEGRITY && !defined(KERNEL_INTEGRITY_WT)))
+ 	/* Watchtower
+@@ -765,6 +967,9 @@
+ 
+ 	// Clear thread pointer
+ 	msr		TPIDR_EL1, xzr						// Set thread register
++	cbnz	x21, 9f
++	LOADER_CHECKPOINT 7
++9:
+ 
+ 
+ #if defined(APPLE_ARM64_ARCH_FAMILY)
+@@ -778,6 +983,9 @@
+ 	mrs x12, MIDR_EL1
+ 
+ 	APPLY_TUNABLES x12, x13, x14
++	cbnz	x21, 9f
++	LOADER_CHECKPOINT 8
++9:
+ 
+ 
+ #if HAS_CLUSTER
+@@ -791,6 +999,9 @@
+ 	cbnz	x21, Ltrampoline
+ 
+ 	// Set KVA of boot args as first arg
++	cbnz	x21, 9f
++	LOADER_CHECKPOINT 9
++9:
+ 	add		x0, x20, x22
+ 	sub		x0, x0, x23
+ 
 diff --git a/osfmk/conf/Makefile b/osfmk/conf/Makefile
 index 050f34a53c49..c58ff62cd419 100644
 --- a/osfmk/conf/Makefile
