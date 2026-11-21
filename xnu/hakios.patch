@@ -2985,9 +2985,25 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
  
  
  #if HAS_CLUSTER
-@@ -791,6 +999,9 @@
+@@ -790,7 +998,25 @@
+ 	// If x21 != 0, we're doing a warm reset, so we need to trampoline to the kernel pmap.
  	cbnz	x21, Ltrampoline
  
++	/*
++	 * Bring-up probe, before the (first) jump into the kernel's virtual address space:
++	 * is that address executable, and is the stack (already a KVA) readable and writable?
++	 */
++	adrp	x9, 8f
++	add		x9, x9, #:lo12:8f
++	add		x9, x9, x22
++	sub		x9, x9, x23
++	br		x9
++8:
++	LOADER_CHECKPOINT 29
++	stp		x9, x10, [sp, #-16]!
++	ldp		x9, x10, [sp], #16
++	LOADER_CHECKPOINT 39
++
  	// Set KVA of boot args as first arg
 +	cbnz	x21, 9f
 +	LOADER_CHECKPOINT 9
