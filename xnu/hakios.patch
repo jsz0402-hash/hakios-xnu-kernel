@@ -3477,7 +3477,62 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
  
  #if CONFIG_MACF
  	kernel_bootstrap_log("mac_policy_init");
-@@ -721,6 +729,9 @@
+@@ -489,6 +497,7 @@
+ #endif
+ 
+ 	kernel_startup_initialize_upto(STARTUP_SUB_MACH_IPC);
++	loader_checkpoint(207);
+ 
+ 	/*
+ 	 * As soon as the virtual memory system is up, we record
+@@ -502,12 +511,14 @@
+ 
+ 	kernel_bootstrap_log("machine_init");
+ 	machine_init();
++	loader_checkpoint(208);
+ 
+ 	kernel_bootstrap_log("thread_machine_init_template");
+ 	thread_machine_init_template();
+ 
+ 	kernel_bootstrap_log("clock_init");
+ 	clock_init();
++	loader_checkpoint(209);
+ 
+ 	/*
+ 	 *	Initialize the IPC, task, and thread subsystems.
+@@ -531,6 +542,7 @@
+ 
+ 	kernel_bootstrap_log("thread_init");
+ 	thread_init();
++	loader_checkpoint(210);
+ 
+ 	kernel_bootstrap_log("restartable_init");
+ 	restartable_init();
+@@ -550,6 +562,7 @@
+ 	/* initialize exceptions */
+ 	kernel_bootstrap_log("exception_init");
+ 	exception_init();
++	loader_checkpoint(211);
+ 
+ #if CONFIG_SCHED_SFI
+ 	kernel_bootstrap_log("sfi_init");
+@@ -612,6 +625,7 @@
+ 	 */
+ 	kernel_bootstrap_thread_log("sched_startup");
+ 	sched_startup();
++	loader_checkpoint(212);
+ 
+ 	/*
+ 	 * Thread lifecycle maintenance (teardown, stack allocation)
+@@ -696,6 +710,7 @@
+ 	 * interrupts or preemption enabled may begin enforcement.
+ 	 */
+ 	kernel_startup_initialize_upto(STARTUP_SUB_EARLY_BOOT);
++	loader_checkpoint(213);
+ 
+ #if SCHED_HYGIENE_DEBUG
+ 	// Reset interrupts masked timeout before we enable interrupts
+@@ -721,6 +736,9 @@
  	kernel_bootstrap_log("vnguard_policy_init");
  	vnguard_policy_init();
  #endif
