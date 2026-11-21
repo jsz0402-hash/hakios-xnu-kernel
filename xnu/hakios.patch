@@ -2091,7 +2091,6 @@ index 0316792a3f42..b9c195b09cd1 100644
  # Assume LTO scaling by default, unless it is being explicitly passed on the command-line
  LARGE_BUILD_FOOTPRINT := $(if $(BUILD_LTO),$(BUILD_LTO),1)
 diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
-index e26a1d70f470..f91095c98d26 100644
 --- a/osfmk/arm/arm_init.c
 +++ b/osfmk/arm/arm_init.c
 @@ -73,6 +73,9 @@
@@ -2104,7 +2103,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  #include <console/serial_protos.h>
  
-@@ -335,7 +338,11 @@ arm_setup_pre_sign(void)
+@@ -335,7 +338,11 @@
   */
  
  __startup_func
@@ -2116,15 +2115,29 @@ index e26a1d70f470..f91095c98d26 100644
  arm_init(
  	boot_args       *args)
  {
-@@ -354,6 +361,7 @@ arm_init(
+@@ -346,30 +353,41 @@
+ 	DTEntry chosen = NULL;
+ 	unsigned int dt_entry_size = 0;
+ 
++	loader_checkpoint(90);
+ 	arm_setup_pre_sign();
++	loader_checkpoint(92);
+ 
+ 	arm_slide_rebase_and_sign_image();
++	loader_checkpoint(93);
+ 
+ 	/* If kernel integrity is supported, use a constant copy of the boot args. */
  	const_boot_args = *args;
  	BootArgs = args = &const_boot_args;
- 
+-
++	loader_checkpoint(91);
++
 +	loader_checkpoint(10);
  	cpu_data_init(&BootCpuData);
  #if defined(HAS_APPLE_PAC)
  	/* bootstrap cpu process dependent key for kernel has been loaded by start.s */
-@@ -362,14 +370,20 @@ arm_init(
+ 	BootCpuData.rop_key = ml_default_rop_pid();
+ 	BootCpuData.jop_key = ml_default_jop_pid();
  #endif /* defined(HAS_APPLE_PAC) */
 +	loader_checkpoint(101);
  
@@ -2145,7 +2158,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  #if (DEVELOPMENT || DEBUG)
  	unsigned long const *platform_stall_ptr = NULL;
-@@ -385,6 +399,7 @@ arm_init(
+@@ -385,6 +403,7 @@
  	}
  
  	platform_stall_panic_or_spin(PLATFORM_STALL_XNU_LOCATION_ARM_INIT);
@@ -2153,7 +2166,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  	chosen = NULL; // Force a re-lookup later on since VM addresses are not final at this point
  	dt_entry_size = 0;
-@@ -422,10 +437,13 @@ arm_init(
+@@ -422,10 +441,13 @@
  	}
  #endif
  
@@ -2167,7 +2180,7 @@ index e26a1d70f470..f91095c98d26 100644
  	assert(master_cpu >= 0 && master_cpu <= ml_get_max_cpu_number());
  
  	BootCpuData.cpu_number = (unsigned short)master_cpu;
-@@ -439,11 +457,14 @@ arm_init(
+@@ -439,11 +461,14 @@
  	CpuDataEntries[master_cpu].cpu_data_paddr = (void *)((uintptr_t)(args->physBase)
  	    + ((uintptr_t)&BootCpuData
  	    - (uintptr_t)(args->virtBase)));
@@ -2182,7 +2195,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  	/*
  	 * Preemption is enabled for this thread so that it can lock mutexes without
-@@ -452,12 +473,16 @@ arm_init(
+@@ -452,12 +477,16 @@
  	 * preemption level is not really meaningful for the bootstrap thread.
  	 */
  	thread->machine.preemption_count = 0;
@@ -2199,7 +2212,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  	/*
  	 * Initialize the timer callout world
-@@ -465,6 +490,7 @@ arm_init(
+@@ -465,6 +494,7 @@
  	timer_call_init();
  
  	cpu_init();
@@ -2207,7 +2220,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  	processor_bootstrap();
  
-@@ -514,6 +540,7 @@ arm_init(
+@@ -514,6 +544,7 @@
  #endif  /* __ARM_PAN_AVAILABLE__ */
  
  	arm_vm_init(xmaxmem, args);
@@ -2215,7 +2228,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  	if (debug_boot_arg) {
  		patch_low_glo();
-@@ -527,7 +554,9 @@ arm_init(
+@@ -527,7 +558,9 @@
  
  	/* Setup debugging output. */
  	const unsigned int serial_exists = serial_init();
@@ -2225,7 +2238,7 @@ index e26a1d70f470..f91095c98d26 100644
  	kprintf("kprintf initialized\n");
  
  	serialmode = 0;
-@@ -569,6 +598,7 @@ arm_init(
+@@ -569,6 +602,7 @@
  		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
  	}
  	PE_create_console();
@@ -2233,7 +2246,7 @@ index e26a1d70f470..f91095c98d26 100644
  
  	/* setup console output */
  	PE_init_printf(FALSE);
-@@ -647,6 +677,7 @@ arm_init(
+@@ -647,6 +681,7 @@
  	 * against string vulnerabilities
  	 */
  	__stack_chk_guard &= ~(0xFFULL << 8);
@@ -2241,7 +2254,7 @@ index e26a1d70f470..f91095c98d26 100644
  	machine_startup(args);
  }
  
-@@ -673,6 +704,9 @@ arm_init_cpu(
+@@ -673,6 +708,9 @@
  
  
  	machine_set_current_thread(cpu_data_ptr->cpu_active_thread);
