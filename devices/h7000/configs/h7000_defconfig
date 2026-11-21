@@ -1,0 +1,4 @@
+# HakiOS defconfig for the BBK S5 (h7000): the common kernel, the sda660 family's facts, and this device's own.
+#include common_defconfig
+#include sda660.config
+#include h7000.config
