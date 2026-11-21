@@ -2413,10 +2413,27 @@ index 94e91306b143..0ec1323086b7 100644
  #endif
  
 diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
-index e76e7e70ab9c..828a51171c7e 100644
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
-@@ -734,6 +734,9 @@ ml_get_machine_mem(void)
+@@ -468,6 +468,9 @@
+ void
+ machine_startup(__unused boot_args * args)
+ {
++	extern void loader_checkpoint(uint64_t n);
++
++	loader_checkpoint(200);
+ #if defined(HAS_IPI) && (DEVELOPMENT || DEBUG)
+ 	if (!PE_parse_boot_argn("fastipi", &gFastIPI, sizeof(gFastIPI))) {
+ 		gFastIPI = 1;
+@@ -476,6 +479,7 @@
+ 
+ 
+ 	machine_conf();
++	loader_checkpoint(201);
+ 
+ 
+ 	/*
+@@ -734,6 +738,9 @@
  	return machine_info.memory_size;
  }
  
@@ -2426,7 +2443,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  __attribute__((noreturn))
  void
  halt_all_cpus(boolean_t reboot)
-@@ -745,6 +748,9 @@ halt_all_cpus(boolean_t reboot)
+@@ -745,6 +752,9 @@
  		printf("CPU halted\n");
  		PEHaltRestart(kPEHaltCPU);
  	}
@@ -2436,7 +2453,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  	while (1) {
  		;
  	}
-@@ -932,6 +938,99 @@ ml_read_chip_revision(unsigned int *rev __unused)
+@@ -932,6 +942,99 @@
  #endif
  }
  
@@ -2536,7 +2553,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  void
  ml_parse_cpu_topology(void)
  {
-@@ -945,6 +1044,7 @@ ml_parse_cpu_topology(void)
+@@ -945,6 +1048,7 @@
  	int64_t cluster_max_cpu_phys_id[MAX_CPU_CLUSTER_PHY_ID + 1];
  	const boolean_t cpus_boot_arg_present = PE_parse_boot_argn("cpus", &cpu_boot_arg, sizeof(cpu_boot_arg));
  	const boolean_t cpumask_boot_arg_present = PE_parse_boot_argn("cpumask", &cpumask_boot_arg, sizeof(cpumask_boot_arg));
@@ -2544,7 +2561,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  
  	// The cpus=N and cpumask=N boot args cannot be used simultaneously. Flag this
  	// so that we trigger a panic later in the boot process, once serial is enabled.
-@@ -1005,6 +1105,20 @@ ml_parse_cpu_topology(void)
+@@ -1005,6 +1109,20 @@
  		cpu->phys_id = (uint32_t)ml_readprop(child, "reg", ML_READPROP_MANDATORY);
  
  		cpu->l2_access_penalty = (uint32_t)ml_readprop(child, "l2-access-penalty", 0);
@@ -2565,7 +2582,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  		cpu->l2_cache_size = (uint32_t)ml_readprop(child, "l2-cache-size", 0);
  		cpu->l2_cache_id = (uint32_t)ml_readprop(child, "l2-cache-id", 0);
  		cpu->l3_cache_size = (uint32_t)ml_readprop(child, "l3-cache-size", 0);
-@@ -1107,6 +1221,7 @@ ml_parse_cpu_topology(void)
+@@ -1107,6 +1225,7 @@
  	cluster_offsets[0] = 0;
  #endif
  	assert(topology_info.boot_cpu != NULL);
@@ -2573,7 +2590,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  	ml_read_chip_revision(&topology_info.chip_revision);
  
  	/*
-@@ -1427,17 +1542,15 @@ ml_processor_register(ml_processor_info_t *in_processor_info,
+@@ -1427,17 +1546,15 @@
  	processor_t processor = PERCPU_GET_RELATIVE(processor, cpu_data, this_cpu_datap);
  	if (!is_boot_cpu) {
  		processor_init(processor, this_cpu_datap->cpu_number, pset);
@@ -2587,7 +2604,8 @@ index e76e7e70ab9c..828a51171c7e 100644
 -			 */
 -			processor_set_primary(processor, master_processor);
 -		}
- 	}
+-	}
++	}
 +	/*
 +	 * Cores that have a non-zero L2 access penalty compared
 +	 * to the boot processor should be de-prioritized by the
@@ -2599,7 +2617,7 @@ index e76e7e70ab9c..828a51171c7e 100644
  
  	*processor_out = processor;
  	*ipi_handler_out = cpu_signal_handler;
-@@ -2237,8 +2350,16 @@ _enable_virtual_timer(void)
+@@ -2237,8 +2354,16 @@
  	uint64_t cntvctl = CNTV_CTL_EL0_ENABLE; /* One wants to use 32 bits, but "mrs" prefers it this way */
  
  	__builtin_arm_wsr64("CNTV_CTL_EL0", cntvctl);
@@ -3408,7 +3426,6 @@ index 8e29586464de..0a7de6fc4be7 100644
  				if (idle_reason == 0) {
  					idle_reason = 4;
 diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
-index bec97fbf7243..203e1f48783f 100644
 --- a/osfmk/kern/startup.c
 +++ b/osfmk/kern/startup.c
 @@ -156,6 +156,7 @@
@@ -3419,7 +3436,48 @@ index bec97fbf7243..203e1f48783f 100644
  #endif
  #endif
  
-@@ -721,6 +722,9 @@ kernel_bootstrap_thread(void)
+@@ -422,6 +423,9 @@
+ void
+ kernel_bootstrap(void)
+ {
++	extern void loader_checkpoint(uint64_t n);
++
++	loader_checkpoint(202);
+ 	kern_return_t   result;
+ 	thread_t        thread;
+ 	char            namep[16];
+@@ -432,6 +436,7 @@
+ 
+ 	kernel_bootstrap_log("vm_mem_bootstrap");
+ 	vm_mem_bootstrap();
++	loader_checkpoint(203);
+ 
+ 	machine_info.memory_size = (uint32_t)mem_size;
+ #if XNU_TARGET_OS_OSX
+@@ -448,6 +453,7 @@
+ 	atm_init();
+ #endif
+ 	kernel_startup_initialize_upto(STARTUP_SUB_OSLOG);
++	loader_checkpoint(204);
+ 
+ #if CONFIG_UBSAN_MINIMAL
+ 	kernel_bootstrap_log("UBSan minimal runtime init");
+@@ -476,12 +482,14 @@
+ 
+ 	kernel_bootstrap_log("console_init");
+ 	console_init();
++	loader_checkpoint(205);
+ 
+ 	kernel_bootstrap_log("stackshot_init");
+ 	stackshot_init();
+ 
+ 	kernel_bootstrap_log("sched_init");
+ 	sched_init();
++	loader_checkpoint(206);
+ 
+ #if CONFIG_MACF
+ 	kernel_bootstrap_log("mac_policy_init");
+@@ -721,6 +729,9 @@
  	kernel_bootstrap_log("vnguard_policy_init");
  	vnguard_policy_init();
  #endif
