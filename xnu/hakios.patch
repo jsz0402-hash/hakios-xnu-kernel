@@ -2212,23 +2212,30 @@ diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
  
  	/*
  	 * Initialize the timer callout world
-@@ -465,6 +494,7 @@
+@@ -465,8 +494,11 @@
  	timer_call_init();
  
  	cpu_init();
+-
 +	loader_checkpoint(16);
- 
++
++	loader_checkpoint(160);
  	processor_bootstrap();
++	loader_checkpoint(161);
  
-@@ -514,6 +544,7 @@
+ 	if (PE_parse_boot_argn("maxmem", &maxmem, sizeof(maxmem))) {
+ 		xmaxmem = (uint64_t) maxmem * (1024 * 1024);
+@@ -513,7 +545,9 @@
+ 	__builtin_arm_wsr("pan", 1);
  #endif  /* __ARM_PAN_AVAILABLE__ */
  
++	loader_checkpoint(162);
  	arm_vm_init(xmaxmem, args);
 +	loader_checkpoint(17);
  
  	if (debug_boot_arg) {
  		patch_low_glo();
-@@ -527,7 +558,9 @@
+@@ -527,7 +561,9 @@
  
  	/* Setup debugging output. */
  	const unsigned int serial_exists = serial_init();
@@ -2238,7 +2245,7 @@ diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
  	kprintf("kprintf initialized\n");
  
  	serialmode = 0;
-@@ -569,6 +602,7 @@
+@@ -569,6 +605,7 @@
  		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
  	}
  	PE_create_console();
@@ -2246,7 +2253,7 @@ diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
  
  	/* setup console output */
  	PE_init_printf(FALSE);
-@@ -647,6 +681,7 @@
+@@ -647,6 +684,7 @@
  	 * against string vulnerabilities
  	 */
  	__stack_chk_guard &= ~(0xFFULL << 8);
@@ -2254,7 +2261,7 @@ diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
  	machine_startup(args);
  }
  
-@@ -673,6 +708,9 @@
+@@ -673,6 +711,9 @@
  
  
  	machine_set_current_thread(cpu_data_ptr->cpu_active_thread);
