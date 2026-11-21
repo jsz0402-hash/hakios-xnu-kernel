@@ -2122,9 +2122,10 @@ index e26a1d70f470..f91095c98d26 100644
  
 +	loader_checkpoint(10);
  	cpu_data_init(&BootCpuData);
++	loader_checkpoint(101);
  #if defined(HAS_APPLE_PAC)
  	/* bootstrap cpu process dependent key for kernel has been loaded by start.s */
-@@ -362,14 +370,19 @@ arm_init(
+@@ -362,14 +370,20 @@ arm_init(
  #endif /* defined(HAS_APPLE_PAC) */
  
  	PE_init_platform(FALSE, args); /* Get platform expert set up */
@@ -3502,3 +3503,50 @@ index 3ebc295117a3..de101eafc83b 100755
  def find_non_ascii(s):
      for c in s:
          if ord(c) >= 0x80: return True
+diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -389,6 +389,9 @@
+ 	SecureDTInit(PE_state.deviceTreeHead, PE_state.deviceTreeSize);
+ }
+ 
++/* Bring-up checkpoints of this port (see osfmk/arm/arm_init.c and osfmk/arm64/loader_return.c): */
++extern void loader_checkpoint(uint64_t n);
++
+ void
+ PE_init_platform(boolean_t vm_initialized, void *args)
+ {
+@@ -397,6 +400,7 @@
+ 	void * const    *prop;
+ 	boot_args      *boot_args_ptr = (boot_args *) args;
+ 
++	loader_checkpoint(102);
+ 	if (PE_state.initialized == FALSE) {
+ 		PE_state.initialized = TRUE;
+ 		PE_state.bootArgs = boot_args_ptr;
+@@ -415,6 +419,7 @@
+ 		PE_state.video.v_display = boot_args_ptr->Video.v_display;
+ 		strlcpy(PE_state.video.v_pixelFormat, "BBBBBBBBGGGGGGGGRRRRRRRR", sizeof(PE_state.video.v_pixelFormat));
+ 	}
++	loader_checkpoint(103);
+ 	if (!vm_initialized) {
+ 		/*
+ 		 * Setup the Device Tree routines
+@@ -422,7 +427,9 @@
+ 		 * can be used..
+ 		 */
+ 		SecureDTInit(PE_state.deviceTreeHead, PE_state.deviceTreeSize);
++		loader_checkpoint(104);
+ 		pe_identify_machine(boot_args_ptr);
++		loader_checkpoint(105);
+ 	} else {
+ 		pe_arm_init_interrupts(args);
+ 		pe_arm_init_debug(args);
+@@ -499,6 +506,7 @@
+ 			}
+ 		}
+ 		pe_init_debug();
++		loader_checkpoint(106);
+ 	}
+ }
+ 
