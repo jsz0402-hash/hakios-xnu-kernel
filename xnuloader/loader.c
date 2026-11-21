@@ -344,12 +344,37 @@ static int hc_log_skips;                /* logs not written this run (said twice
 static void hc_print_state(const char *when);
 static void hc_take_back(const char *when);
 
+/* Bring-up aid: the kernel log on the screen too, so a run can be read off a photo
+ * (there is no serial port on the tablet, and reading the log partition needs recovery). */
+static void
+echo_kernel_log(const char *klog, uint64_t klog_len)
+{
+	static const uint64_t head = 3000, tail = 1500;
+	if (klog == NULL || klog_len == 0) {
+		return;
+	}
+	print("\n== KERNEL LOG (on screen) ==\n");
+	uint64_t n = klog_len < head ? klog_len : head;
+	for (uint64_t i = 0; i < n; i++) {
+		put_char(klog[i]);
+	}
+	if (klog_len > n) {
+		print("\n... [%d bytes omitted] ...\n", klog_len - n);
+		uint64_t from = klog_len - (klog_len < tail ? klog_len : tail);
+		for (uint64_t i = from; i < klog_len; i++) {
+			put_char(klog[i]);
+		}
+	}
+	print("\n== END OF KERNEL LOG ==\n");
+}
+
 static void
 write_logs(const char *klog, uint64_t klog_len)
 {
 	efi_block_io *bio = find_log_partition();
 
 	compose_logs(klog, klog_len);
+	echo_kernel_log(klog, klog_len);
 	if (bio == NULL) {
 		/* No log partition (QEMU): echo the returned kernel log on the console instead. */
 		if (klog != NULL) {
