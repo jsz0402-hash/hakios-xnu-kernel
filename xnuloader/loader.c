@@ -4003,6 +4003,7 @@ fb_command(char *cmd)
 			print("== XNULOADER run (usb) ==\n");
 			if (!run_kernel(have_cp, cp)) {
 				set_result("not-started", 0, 0);
+	print("MARK B: run_kernel returned, reason=%d esr=%x elr=%x\n", loader_ctx[CTX_REASON], loader_ctx[CTX_ESR], loader_ctx[CTX_ELR]);
 				compose_logs(NULL, 0);
 			}
 		} else if (starts_with(cmd, "oem hang")) {
@@ -4336,6 +4337,7 @@ print_banner(void)
 efi_status EFIAPI
 efi_main(efi_handle image, efi_system_table *st)
 {
+	print("MARK A: efi_main entered\n");
 	static const efi_guid gop_guid = EFI_GOP_GUID;
 	struct payload_info pi;
 
