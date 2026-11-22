@@ -1991,10 +1991,24 @@ index 2b14eda8f68f..09337bad5b01 100644
 +#endif
      ")";
 diff --git a/iokit/bsddev/IOKitBSDInit.cpp b/iokit/bsddev/IOKitBSDInit.cpp
-index 5219fb0d9ed6..29978e9cff43 100644
 --- a/iokit/bsddev/IOKitBSDInit.cpp
 +++ b/iokit/bsddev/IOKitBSDInit.cpp
-@@ -683,7 +683,14 @@ IOFindBSDRoot( char * rootName, unsigned int rootNameSize,
+@@ -61,6 +61,7 @@
+ #endif
+ 
+ extern dev_t mdevadd(int devid, uint64_t base, unsigned int size, int phys);
++extern "C" void loader_checkpoint(uint64_t n);
+ extern dev_t mdevlookup(int devid);
+ extern void mdevremoveall(void);
+ extern int mdevgetrange(int devid, uint64_t *base, uint64_t *size);
+@@ -678,12 +679,30 @@
+ 
+ 	int xchar, dchar;
+ 
++	loader_checkpoint(250);
++
+ 	// stall here for anyone matching on the IOBSD resource to finish (filesystems)
+ 	matching = IOService::serviceMatching(gIOResourcesKey);
  	assert(matching);
  	matching->setObject(gIOResourceMatchedKey, gIOBSDKey);
  
@@ -2006,14 +2020,52 @@ index 5219fb0d9ed6..29978e9cff43 100644
 +		bsdWait = kSecondScale / 10;
 +	}
 +
-+	if ((service = IOService::waitForMatchingService(matching, bsdWait))) {
++	/*
++	 * Even the short wait of a memory-device root is a timed one, and on a port whose timer
++	 * interrupts do not work yet it never times out: boot-arg hakios_nomatchwait=1 skips it.
++	 */
++	int hakios_nomatchwait = 0;
++	int hakios_skip_bsd_match =
++	    PE_parse_boot_argn("hakios_nomatchwait", &hakios_nomatchwait, sizeof(hakios_nomatchwait)) && hakios_nomatchwait;
++	if (hakios_skip_bsd_match) {
++		IOLog("no IOBSD match wait (hakios_nomatchwait)\n");
++	} else if ((service = IOService::waitForMatchingService(matching, bsdWait))) {
  		OSSafeReleaseNULL(service);
  	} else {
  		IOLog("!BSD\n");
-@@ -762,6 +769,17 @@ IOFindBSDRoot( char * rootName, unsigned int rootNameSize,
+@@ -691,6 +710,8 @@
+ 	matching->release();
+ 	matching = NULL;
+ 
++	loader_checkpoint(251);
++
+ 	if (mountAttempts++) {
+ 		IOLog("mount(%d) failed\n", mountAttempts);
+ 		IOSleep( 5 * 1000 );
+@@ -706,6 +727,8 @@
+ 	    && !PE_parse_boot_argn("rootdev", rdBootVar, kMaxBootVar )) {
+ 		rdBootVar[0] = 0;
+ 	}
++
++	loader_checkpoint(252);
+ 
+ 	if ((regEntry = IORegistryEntry::fromPath( "/chosen", gIODTPlane ))) {
+ 		do {
+@@ -742,6 +765,8 @@
+ 		OSSafeReleaseNULL(regEntry);
+ 	}
+ 
++	loader_checkpoint(253);
++
+ //
+ //	See if we have a RAMDisk property in /chosen/memory-map.  If so, make it into a device.
+ //	It will become /dev/mdx, where x is 0-f.
+@@ -761,6 +786,18 @@
+ 				}
  #endif /* __LP64__ */
  				(void)mdevadd(-1, ml_static_ptovirt(ramdParms[0]) >> 12, (unsigned int) (ramdParms[1] >> 12), 0);        /* Initialize it and pass back the device number */
- 			}
++				loader_checkpoint(254);
++			}
 +			/*
 +			 * A second image the loader may have left in memory (it becomes
 +			 * /dev/md1): a volume for user space to mount, never the root.
@@ -2024,10 +2076,17 @@ index 5219fb0d9ed6..29978e9cff43 100644
 +				if (ramdParms[1] <= (((uint64_t)UINT_MAX) << 12)) {
 +					(void)mdevadd(-1, ml_static_ptovirt(ramdParms[0]) >> 12, (unsigned int) (ramdParms[1] >> 12), 0);
 +				}
-+			}
+ 			}
  			regEntry->release();                                                            /* Toss the entry */
  		}
- 	}
+@@ -786,6 +823,7 @@
+ 		if (xchar >= 0) {                                                                                /* Do we have a valid memory device name? */
+ 			OSSafeReleaseNULL(matching);
+ 			*root = mdevlookup(xchar);                                                      /* Find the device number */
++			loader_checkpoint(255);
+ 			if (*root >= 0) {                                                                        /* Did we find one? */
+ 				rootName[0] = 'm';                                                              /* Build root name */
+ 				rootName[1] = 'd';                                                              /* Build root name */
 diff --git a/iokit/conf/Makefile b/iokit/conf/Makefile
 index 83259ebf9835..8864e5c7cc41 100644
 --- a/iokit/conf/Makefile
