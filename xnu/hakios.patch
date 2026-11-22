@@ -624,15 +624,18 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  }
  
  void
-@@ -1055,6 +1099,7 @@
+@@ -1054,7 +1098,10 @@
+ {
  	proc_t p = current_proc();
  
++	loader_checkpoint(277);
++
  	process_name("init", p);
 +	loader_checkpoint(271);
  
  	/* Set up exception-to-signal reflection */
  	ux_handler_setup();
-@@ -1064,6 +1109,7 @@
+@@ -1064,6 +1111,7 @@
  #endif
  
  	vm_init_before_launchd();
@@ -640,7 +643,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  
  #if CONFIG_XNUPOST
  	int result = bsd_list_tests();
-@@ -1075,7 +1121,9 @@
+@@ -1075,7 +1123,9 @@
  
  	bsd_init_kprintf("bsd_do_post - done");
  
@@ -650,7 +653,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	lock_trace = 1;
  }
  
-@@ -1108,7 +1156,9 @@
+@@ -1108,7 +1158,9 @@
  	u_int32_t       flags;
  	kern_return_t   err;
  
@@ -3829,13 +3832,33 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
  	bsd_init();
  #endif
  
-@@ -797,6 +819,7 @@
+@@ -797,10 +819,13 @@
  	kdebug_free_early_buf();
  
  	serial_keyboard_init();         /* Start serial keyboard if wanted */
 +	loader_checkpoint(270);
  
  	vm_page_init_local_q(machine_info.max_cpus);
++	loader_checkpoint(273);
+ 
+ 	thread_bind(PROCESSOR_NULL);
++	loader_checkpoint(274);
+ 
+ 	/*
+ 	 * Now that all CPUs are available to run threads, this is essentially
+@@ -808,11 +833,13 @@
+ 	 * any remaining vm_pages that were delayed earlier by pmap_startup().
+ 	 */
+ 	vm_free_delayed_pages();
++	loader_checkpoint(275);
+ 
+ 	/*
+ 	 *	Become the pageout daemon.
+ 	 */
+ 	vm_pageout();
++	loader_checkpoint(276);
+ 	/*NOTREACHED*/
+ }
  
 diff --git a/osfmk/kern/thread.c b/osfmk/kern/thread.c
 index 384ef23fe0e1..d5ab6db0edbc 100644
