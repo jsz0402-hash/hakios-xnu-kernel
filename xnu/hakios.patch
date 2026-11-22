@@ -582,6 +582,16 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	}
  #endif /* DEVFS */
  
+@@ -1108,7 +1139,9 @@
+ 	u_int32_t       flags;
+ 	kern_return_t   err;
+ 
++	loader_checkpoint(239);
+ 	err = IOFindBSDRoot(rootdevice, sizeof(rootdevice), &rootdev, &flags);
++	loader_checkpoint(238);
+ 	if (err) {
+ 		printf("setconf: IOFindBSDRoot returned an error (%d);"
+ 		    "setting rootdevice to 'sd0a'.\n", err);     /* XXX DEBUG TEMP */
 diff --git a/bsd/kern/decmpfs.c b/bsd/kern/decmpfs.c
 index 95192dd62449..b00da803b5b4 100644
 --- a/bsd/kern/decmpfs.c
@@ -1538,10 +1548,43 @@ index d0476214e5f0..c81cadfab1d4 100644
  	if (dq->dq_id == 0) {
  		dq->dq_flags &= ~DQ_MOD;
 diff --git a/bsd/vfs/vfs_subr.c b/bsd/vfs/vfs_subr.c
-index f64d8c647365..f2e13c1aa7f3 100644
 --- a/bsd/vfs/vfs_subr.c
 +++ b/bsd/vfs/vfs_subr.c
-@@ -10995,7 +10995,7 @@ rmdir_remove_orphaned_appleDouble(vnode_t vp, vfs_context_t ctx, int * restart_f
+@@ -1209,6 +1209,9 @@
+ int
+ vfs_mountroot(void)
+ {
++	extern void loader_checkpoint(uint64_t n);
++
++	loader_checkpoint(233);
+ #if CONFIG_MACF
+ 	struct vnode *vp;
+ #endif
+@@ -1237,6 +1240,7 @@
+ 		KDBG_RELEASE(DBG_MOUNTROOT | DBG_FUNC_END, error, 0);
+ 		return error;
+ 	}
++	loader_checkpoint(234);
+ 	if ((error = bdevvp(rootdev, &rootvp))) {
+ 		printf("vfs_mountroot: can't setup bdevvp\n");
+ 
+@@ -1247,6 +1251,7 @@
+ 	 * 4951998 - code we call in vfc_mountroot may replace rootvp
+ 	 * so keep a local copy for some house keeping.
+ 	 */
++	loader_checkpoint(235);
+ 	bdevvp_rootvp = rootvp;
+ 
+ 	for (vfsp = vfsconf; vfsp; vfsp = vfsp->vfc_next) {
+@@ -1258,6 +1263,7 @@
+ 		mp = vfs_rootmountalloc_internal(vfsp, "root_device");
+ 		mp->mnt_devvp = rootvp;
+ 
++		loader_checkpoint(236);
+ 		if (vfsp->vfc_mountroot) {
+ 			error = (*vfsp->vfc_mountroot)(mp, rootvp, ctx);
+ 		} else {
+@@ -10995,7 +11001,7 @@
  	uio_t auio = NULL;
  	int eofflag, siz = UIO_BUFF_SIZE, alloc_size = 0, nentries = 0;
  	int open_flag = 0, full_erase_flag = 0;
