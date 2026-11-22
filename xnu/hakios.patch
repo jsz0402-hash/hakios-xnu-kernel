@@ -2001,6 +2001,15 @@ diff --git a/iokit/bsddev/IOKitBSDInit.cpp b/iokit/bsddev/IOKitBSDInit.cpp
  extern dev_t mdevlookup(int devid);
  extern void mdevremoveall(void);
  extern int mdevgetrange(int devid, uint64_t *base, uint64_t *size);
+@@ -656,7 +657,7 @@
+     dev_t * root, u_int32_t * oflags )
+ {
+ 	mach_timespec_t     t;
+-	IOService *         service;
++	IOService *         service = NULL;     /* (hakios: the memory-device root path reaches setRootMedia() without a match) */
+ 	IORegistryEntry *   regEntry;
+ 	OSDictionary *      matching = NULL;
+ 	OSString *          iostr;
 @@ -678,12 +679,30 @@
  
  	int xchar, dchar;
