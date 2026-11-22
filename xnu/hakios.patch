@@ -601,7 +601,46 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	}
  #endif /* DEVFS */
  
-@@ -1075,7 +1115,9 @@
+@@ -1019,11 +1059,14 @@
+ 	/* Initialize signal state for process 0. */
+ 	bsd_init_kprintf("calling siginit\n");
+ 	siginit(kernproc);
++	loader_checkpoint(266);
+ 
+ 	bsd_init_kprintf("calling bsd_utaskbootstrap\n");
+ 	bsd_utaskbootstrap();
++	loader_checkpoint(267);
+ 
+ 	pal_kernel_announce();
++	loader_checkpoint(268);
+ 
+ 	bsd_init_kprintf("calling mountroot_post_hook\n");
+ 
+@@ -1047,6 +1090,7 @@
+ #endif /* DEVELOPMENT || DEBUG */
+ 
+ 	bsd_init_kprintf("done\n");
++	loader_checkpoint(269);
+ }
+ 
+ void
+@@ -1055,6 +1099,7 @@
+ 	proc_t p = current_proc();
+ 
+ 	process_name("init", p);
++	loader_checkpoint(271);
+ 
+ 	/* Set up exception-to-signal reflection */
+ 	ux_handler_setup();
+@@ -1064,6 +1109,7 @@
+ #endif
+ 
+ 	vm_init_before_launchd();
++	loader_checkpoint(272);
+ 
+ #if CONFIG_XNUPOST
+ 	int result = bsd_list_tests();
+@@ -1075,7 +1121,9 @@
  
  	bsd_init_kprintf("bsd_do_post - done");
  
@@ -611,7 +650,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	lock_trace = 1;
  }
  
-@@ -1108,7 +1150,9 @@
+@@ -1108,7 +1156,9 @@
  	u_int32_t       flags;
  	kern_return_t   err;
  
@@ -3789,6 +3828,14 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
 +	loader_checkpoint(217);
  	bsd_init();
  #endif
+ 
+@@ -797,6 +819,7 @@
+ 	kdebug_free_early_buf();
+ 
+ 	serial_keyboard_init();         /* Start serial keyboard if wanted */
++	loader_checkpoint(270);
+ 
+ 	vm_page_init_local_q(machine_info.max_cpus);
  
 diff --git a/osfmk/kern/thread.c b/osfmk/kern/thread.c
 index 384ef23fe0e1..d5ab6db0edbc 100644
