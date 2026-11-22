@@ -234,6 +234,8 @@ static_kvtophys(const void *va)
  * Jump to the loader's return stub. reason: 0 = orderly end, 2 = checkpoint.
  * Returns only if no loader is listening.
  */
+static void loader_log_append_msgbuf(void);
+
 static void
 loader_jump(uint64_t reason, uint64_t code)
 {
@@ -271,6 +273,13 @@ loader_jump(uint64_t reason, uint64_t code)
 	loader_l2[(stub >> 21) & 0x1ff] = (stub & ~0x1fffffULL) | ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
 	    ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) | ARM_TTE_BLOCK_AP(AP_RWNA) |
 	    ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITEBACK);
+
+	/*
+	 * A checkpoint stops in the middle of a boot, so loader_return()'s end-of-run
+	 * "append the kernel message buffer" never happens: do it here, or the log of
+	 * a deep checkpoint comes back empty (the console has already printed plenty).
+	 */
+	loader_log_append_msgbuf();
 
 	/*
 	 * The stub turns the MMU off, and on real hardware dirty cache lines do
