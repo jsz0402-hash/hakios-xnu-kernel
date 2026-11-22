@@ -1121,10 +1121,11 @@ diff --git a/bsd/kern/kern_sig.c b/bsd/kern/kern_sig.c
  	struct uthread *uth;
  
  	target_act = (thread_t)port_name_to_thread(uap->thread_port,
-@@ -3295,6 +3303,8 @@
+@@ -3295,6 +3303,9 @@
  		return;
  	}
  
++	extern void loader_checkpoint(uint64_t n);
 +	loader_checkpoint(280);
 +
  	if (timerisset(&p->p_vtimer_user.it_value)) {
