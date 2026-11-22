@@ -578,24 +578,30 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  
  	lck_rw_lock_exclusive(&rootvnode_rw_lock);
  	set_rootvnode(init_rootvnode);
-@@ -976,6 +1000,16 @@
+@@ -976,6 +1000,22 @@
  
  		bsd_init_kprintf("calling devfs_kernel_mount\n");
  		devfs_kernel_mount(mounthere);
 +		loader_checkpoint(242);
-+		hakios_version_init();         /* kern.hakios.version, and the version in the boot log */
-+		hakios_input_init();           /* /dev/hakios-touch */
-+		hakios_audio_init();           /* /dev/hakios-audio */
-+		hakios_virtio_blk_init();      /* /dev/rvblk0, a disk image of the host (QEMU) */
-+		hakios_sparse_init();          /* /dev/rsp0, part of an image too big to hold */
++		hakios_version_init();		loader_checkpoint(260);
++         /* kern.hakios.version, and the version in the boot log */
++		hakios_input_init();		loader_checkpoint(261);
++           /* /dev/hakios-touch */
++		hakios_audio_init();		loader_checkpoint(262);
++           /* /dev/hakios-audio */
++		hakios_virtio_blk_init();		loader_checkpoint(263);
++      /* /dev/rvblk0, a disk image of the host (QEMU) */
++		hakios_sparse_init();		loader_checkpoint(264);
++          /* /dev/rsp0, part of an image too big to hold */
 +#if APFS
 +		/* mounts and walks /dev/rvblk0 once userland has /private/var up */
-+		hakios_apfs_check_init();
++		hakios_apfs_check_init();		loader_checkpoint(265);
++
 +#endif
  	}
  #endif /* DEVFS */
  
-@@ -1075,7 +1109,9 @@
+@@ -1075,7 +1115,9 @@
  
  	bsd_init_kprintf("bsd_do_post - done");
  
@@ -605,7 +611,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	lock_trace = 1;
  }
  
-@@ -1108,7 +1144,9 @@
+@@ -1108,7 +1150,9 @@
  	u_int32_t       flags;
  	kern_return_t   err;
  
