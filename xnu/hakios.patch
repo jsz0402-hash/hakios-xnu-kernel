@@ -558,7 +558,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  		if (0 == (err = vfs_mountroot())) {
  			break;
  		}
-@@ -884,6 +905,7 @@
+@@ -884,9 +905,11 @@
  			/*NOTREACHED*/
  		}
  #endif
@@ -566,10 +566,23 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  		printf("cannot mount root, errno = %d\n", err);
  	}
  
-@@ -976,6 +998,15 @@
++loader_checkpoint(240);
+ 	IOSecureBSDRoot(rootdevice);
+ 
+ 	mountlist.tqh_first->mnt_flag |= MNT_ROOTFS;
+@@ -898,6 +921,7 @@
+ 	}
+ 	(void)vnode_ref(init_rootvnode);
+ 	(void)vnode_put(init_rootvnode);
++loader_checkpoint(241);
+ 
+ 	lck_rw_lock_exclusive(&rootvnode_rw_lock);
+ 	set_rootvnode(init_rootvnode);
+@@ -976,6 +1000,16 @@
  
  		bsd_init_kprintf("calling devfs_kernel_mount\n");
  		devfs_kernel_mount(mounthere);
++		loader_checkpoint(242);
 +		hakios_version_init();         /* kern.hakios.version, and the version in the boot log */
 +		hakios_input_init();           /* /dev/hakios-touch */
 +		hakios_audio_init();           /* /dev/hakios-audio */
@@ -582,7 +595,17 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	}
  #endif /* DEVFS */
  
-@@ -1108,7 +1139,9 @@
+@@ -1075,7 +1109,9 @@
+ 
+ 	bsd_init_kprintf("bsd_do_post - done");
+ 
++loader_checkpoint(243);
+ 	load_init_program(p);
++loader_checkpoint(244);
+ 	lock_trace = 1;
+ }
+ 
+@@ -1108,7 +1144,9 @@
  	u_int32_t       flags;
  	kern_return_t   err;
  
