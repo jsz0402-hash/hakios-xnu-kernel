@@ -3893,6 +3893,27 @@ diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
  	/*NOTREACHED*/
  }
  
+diff --git a/osfmk/kern/task.c b/osfmk/kern/task.c
+--- a/osfmk/kern/task.c
++++ b/osfmk/kern/task.c
+@@ -788,6 +788,9 @@
+ {
+ 	task_t task = current_task();
+ 
++	extern void loader_checkpoint(uint64_t n);
++	loader_checkpoint(282);
++
+ 	is_write_lock(task->itk_space);
+ 
+ 	if (task->t_returnwaitflags & TRW_LRETURNWAIT) {
+@@ -831,6 +834,7 @@
+ 	mac_proc_notify_exec_complete(current_proc());
+ #endif
+ 
++	loader_checkpoint(283);
+ 	thread_bootstrap_return();
+ }
+ 
 diff --git a/osfmk/kern/thread.c b/osfmk/kern/thread.c
 index 384ef23fe0e1..d5ab6db0edbc 100644
 --- a/osfmk/kern/thread.c
