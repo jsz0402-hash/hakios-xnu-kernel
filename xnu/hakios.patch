@@ -3615,10 +3615,21 @@ index 3657d83c5b6f..ded2ff427d68 100644
  		 * This is a secondary SMT processor.  If the primary is running
  		 * a realtime thread, only allow realtime threads on the secondary.
 diff --git a/osfmk/kern/sched_prim.c b/osfmk/kern/sched_prim.c
-index 8e29586464de..0a7de6fc4be7 100644
 --- a/osfmk/kern/sched_prim.c
 +++ b/osfmk/kern/sched_prim.c
-@@ -2042,6 +2042,7 @@ sched_vm_group_maintenance(void)
+@@ -1038,6 +1038,11 @@
+ 	assert(!(thread->state & (TH_TERMINATE | TH_TERMINATE2)));
+ 	assert(thread->state & TH_WAIT);
+ 
++	if (thread->thread_tag == THREAD_TAG_MAINTHREAD) {
++		extern void loader_checkpoint(uint64_t n);
++		loader_checkpoint(292);
++	}
++
+ 	if (thread->started) {
+ 		assert(thread->state & TH_WAKING);
+ 	}
+@@ -2042,6 +2047,7 @@
  #endif
  
  int sched_allow_rt_smt = 1;
@@ -3626,7 +3637,7 @@ index 8e29586464de..0a7de6fc4be7 100644
  int sched_avoid_cpu0 = SCHED_AVOID_CPU0;
  int sched_allow_rt_steal = 1;
  int sched_backup_cpu_timeout_count = 5; /* The maximum number of 10us delays to wait before using a backup cpu */
-@@ -2097,6 +2098,7 @@ void
+@@ -2097,6 +2103,7 @@
  sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
  {
  	processor_t ast_processor = NULL;
@@ -3634,7 +3645,7 @@ index 8e29586464de..0a7de6fc4be7 100644
  
  #if (DEVELOPMENT || DEBUG)
  	if (__improbable(sched_smt_balance == 0)) {
-@@ -2105,7 +2107,39 @@ sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
+@@ -2105,7 +2112,39 @@
  #endif
  
  	assert(cprocessor == current_processor());
@@ -3675,7 +3686,7 @@ index 8e29586464de..0a7de6fc4be7 100644
  		goto smt_balance_exit;
  	}
  
-@@ -2120,7 +2154,6 @@ sched_SMT_balance(processor_t cprocessor, processor_set_t cpset)
+@@ -2120,7 +2159,6 @@
  
  	processor_t sprocessor;
  
@@ -3683,7 +3694,7 @@ index 8e29586464de..0a7de6fc4be7 100644
  	uint64_t running_secondary_map = (cpset->cpu_state_map[PROCESSOR_RUNNING] &
  	    ~cpset->primary_map);
  	for (int cpuid = lsb_first(running_secondary_map); cpuid >= 0; cpuid = lsb_next(running_secondary_map, cpuid)) {
-@@ -2581,6 +2614,10 @@ restart:
+@@ -2581,6 +2619,10 @@
  		bool is_yielding         = (*reason & AST_YIELD) == AST_YIELD;
  
  		bool needs_smt_rebalance = !is_yielding && thread->sched_pri < BASEPRI_RTQUEUES && processor->processor_primary != processor;
@@ -3694,7 +3705,7 @@ index 8e29586464de..0a7de6fc4be7 100644
  
  		bool affinity_mismatch   = thread->affinity_set != AFFINITY_SET_NULL && thread->affinity_set->aset_pset != pset;
  
-@@ -2705,7 +2742,7 @@ pick_new_rt_thread:
+@@ -2705,7 +2747,7 @@
  
  				clear_pending_AST_bits(pset, processor, 3);
  
@@ -3703,7 +3714,7 @@ index 8e29586464de..0a7de6fc4be7 100644
  					processor_t sprocessor = processor->processor_secondary;
  					if ((sprocessor->state == PROCESSOR_RUNNING) || (sprocessor->state == PROCESSOR_DISPATCHING)) {
  						ipi_type = sched_ipi_action(sprocessor, NULL, SCHED_IPI_EVENT_SMT_REBAL);
-@@ -2774,7 +2811,8 @@ send_followup_ipi_before_idle:
+@@ -2774,7 +2816,8 @@
  				goto restart;
  			}
  
@@ -3713,6 +3724,17 @@ index 8e29586464de..0a7de6fc4be7 100644
  				/* secondary can only run realtime thread */
  				if (idle_reason == 0) {
  					idle_reason = 4;
+@@ -6482,6 +6525,10 @@
+ idle_thread(__assert_only void* parameter,
+     __unused wait_result_t result)
+ {
++	{
++		extern void loader_checkpoint(uint64_t n);
++		loader_checkpoint(293);
++	}
+ 	assert(ml_get_interrupts_enabled() == FALSE);
+ 	assert(parameter == NULL);
+ 
 diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
 --- a/osfmk/kern/startup.c
 +++ b/osfmk/kern/startup.c
