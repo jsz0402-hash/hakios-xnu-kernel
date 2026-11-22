@@ -4001,6 +4001,25 @@ index 3ad743fc3efb..ce036c5a2c26 100644
  #else
  void
  pe_init_fiq()
+diff --git a/pexpert/arm/pe_identify_machine.c b/pexpert/arm/pe_identify_machine.c
+--- a/pexpert/arm/pe_identify_machine.c
++++ b/pexpert/arm/pe_identify_machine.c
+@@ -566,7 +566,14 @@
+ 	/* Set up mappings for interrupt controller and possibly timers (if they haven't been set up already) */
+ 	if (args != NULL) {
+ 		if (!pe_arm_map_interrupt_controller()) {
+-			return 0;
++			/*
++			 * (hakios) This port's device tree has no Apple interrupt-controller/timer nodes
++			 * (the GICv3 driver finds its own). Returning 0 here skipped pe_arm_init_timer()
++			 * and with it the interrupt setup, and the kernel then ran without any timer
++			 * interrupt: pageout never woke, the init thread never ran, bsd_init_task never
++			 * started launchd. Continue to the timer setup instead.
++			 */
++			kprintf("pe_arm_init_interrupts: no Apple interrupt-controller; continuing\n");
+ 		}
+ 	}
+ 
 diff --git a/pexpert/arm/pe_kprintf.c b/pexpert/arm/pe_kprintf.c
 index 65144c74239c..ab6260d52d84 100644
 --- a/pexpert/arm/pe_kprintf.c
