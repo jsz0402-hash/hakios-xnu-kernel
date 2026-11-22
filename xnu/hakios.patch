@@ -534,7 +534,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  
  #if CONFIG_DTRACE
  	dtrace_postinit();
-@@ -855,8 +871,10 @@
+@@ -855,13 +871,16 @@
  
  	bsd_init_kprintf("calling inittodr\n");
  	inittodr(0);
@@ -545,7 +545,21 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
  	while (TRUE) {
  		int err;
  
-@@ -976,6 +994,15 @@
+ 		bsd_init_kprintf("calling setconf\n");
+ 		setconf();
++		loader_checkpoint(229);
+ #if CONFIG_NETBOOT
+ 		netboot = (mountroot == netboot_mountroot);
+ #endif
+@@ -884,6 +903,7 @@
+ 			/*NOTREACHED*/
+ 		}
+ #endif
++		loader_checkpoint(228);
+ 		printf("cannot mount root, errno = %d\n", err);
+ 	}
+ 
+@@ -976,6 +996,15 @@
  
  		bsd_init_kprintf("calling devfs_kernel_mount\n");
  		devfs_kernel_mount(mounthere);
